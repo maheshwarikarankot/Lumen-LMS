@@ -1,0 +1,44 @@
+{
+  "name": "lumen-lms",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lumen — a small learning management system",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.10.1",
+      "onFail": "download"
+    }
+  },
+  "packageManager": "pnpm@12.10.1",
+  "scripts": {
+    "dev": "pnpm --filter @lumen/shared build && pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "start": "pnpm -r --parallel start",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm --filter @lumen/shared build && pnpm -r --parallel typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter @lumen/api db:generate",
+    "db:migrate": "pnpm --filter @lumen/api db:migrate",
+    "db:seed": "pnpm --filter @lumen/api db:seed",
+    "db:studio": "pnpm --filter @lumen/api db:studio"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@next/eslint-plugin-next": "^16.0.0",
+    "eslint": "^9.39.0",
+    "eslint-config-prettier": "^10.1.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.0.0",
+    "prettier": "^3.6.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.46.0"
+  }
+}

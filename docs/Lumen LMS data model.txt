@@ -1,0 +1,77 @@
+title Lumen LMS data model
+
+users [icon: user, color: blue] {
+  id uuid pk
+  email string unique not nullable
+  password_hash string not nullable
+  full_name string not nullable
+  role "enum(student, instructor, admin)" "default:student"
+  avatar_Url string nullable
+  created_at timestamptz
+  updated_at timestamptz
+  deleted_at timestamptz nullable
+}
+
+refresh_tokens [icon: key, color: blue] {
+  id uuid pk
+  user_id uuid fk - users.id, cascade delete
+  token_hash string not nullable
+  expires_at timestamptz
+  revoked_at timestamptz nullable
+  created_at timestamptz
+}
+
+courses [icon: book-open, color: green] {
+  id uuid pk
+  instructorId uuid fk - users.id
+  title string not nullable
+  slug string unique not nullable
+  summary string not nullable
+  description text
+  thumbnail_Url string nullable
+  status "enum(draft, published, archived)" "default:Draft"
+  level "enum(beginner, intermediate, advanced)" 
+  published_at timestamptz nullable
+  created_at timestamptz
+  updated_at timestamptz
+  deleted_at timestamptz 
+}
+
+modules [icon: layers, color: green] {
+  id uuid pk
+  courses_id uuid fk - courses.id,cascade delete
+  title string not nullable
+  position int not nullable
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+lessons [icon: file-text, color: green] {
+  id uuid pk
+  module_id uuid fk - modules.id, cascade delete
+  title string not nullable
+  content_md string
+  video_Url string nullable
+  duration_minutes int
+  position int not nullable
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+enrollments [icon: check-square, color: orange] {
+  id uuid pk
+  course_id uuid fk - courses.id
+  status "enum(active, completed, cancelled)"
+  student_id uuid fk - users.id
+  status enum
+  enrolled_at timestamptz
+  completed_at timestamptz
+  dropped_at timestamptz
+}
+
+refresh_tokens.userId > users.id
+courses.instructorId > users.id
+modules.courseId > courses.id
+lessons.moduleId > modules.id
+enrollments.userId > users.id
+enrollments.courseId > courses.id

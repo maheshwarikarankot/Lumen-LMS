@@ -1,0 +1,172 @@
+// Lumen LMS — core schema. "The data model".
+//
+// Conventions
+//  - Postgres columns are snake_case (@map); Prisma fields are camelCase.
+//  - Timestamps are timestamptz, stored in UTC.
+//  - Users, courses and enrollments are soft-deleted (deletedAt). Content inside a course
+//    (modules, lessons) is hard-deleted and cascades from its parent.
+//  - modules(course_id, position) and lessons(module_id, position) are DEFERRABLE INITIALLY
+//    DEFERRED unique constraints. Prisma cannot express that, so it is set by hand in
+//    migrations/20261013000000_init/migration.sql. See docs/decisions/0004.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+
+  @@map("user_role")
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@map("course_status")
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+
+  @@map("course_level")
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  DROPPED
+
+  @@map("enrollment_status")
+}
+
+model User {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Always stored lowercased and trimmed (enforced by a CHECK in the migration).
+  email        String    @unique
+  /// bcrypt, cost 12. Never leaves the database layer.
+  passwordHash String    @map("password_hash")
+  fullName     String    @map("full_name")
+  role         UserRole  @default(STUDENT)
+  avatarUrl    String?   @map("avatar_url")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  courses       Course[]
+  enrollments   Enrollment[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  /// Only the hash is stored: a stolen database must not hand over live sessions.
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Course {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// 3–120 chars (CHECK in the migration).
+  title        String
+  /// URL-safe, generated from the title. Does not change once published.
+  slug         String       @unique
+  /// Catalog card blurb, max 300 chars (CHECK in the migration).
+  summary      String
+  /// Longer body, Markdown allowed. Required before a course can be published.
+  description  String?
+  thumbnailUrl String?      @map("thumbnail_url")
+  instructorId String       @map("instructor_id") @db.Uuid
+  status       CourseStatus @default(DRAFT)
+  level        CourseLevel
+  /// Set once, on first publish. Unpublishing does not clear it.
+  publishedAt  DateTime?    @map("published_at") @db.Timestamptz(3)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt    DateTime?    @map("deleted_at") @db.Timestamptz(3)
+
+  // Restrict: a user row is only ever soft-deleted, so a real DELETE should fail loudly.
+  instructor  User         @relation(fields: [instructorId], references: [id], onDelete: Restrict)
+  modules     Module[]
+  enrollments Enrollment[]
+
+  @@index([instructorId])
+  @@index([status])
+  @@map("courses")
+}
+
+
+model Module {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId  String   @map("course_id") @db.Uuid
+  title     String
+  /// Order within the course. Unique per course, deferrable (see header).
+  position  Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+
+  @@unique([courseId, position])
+  @@map("modules")
+}
+
+
+model Lesson {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  moduleId        String   @map("module_id") @db.Uuid
+  title           String
+  /// Lesson body as Markdown.
+  contentMd       String   @default("") @map("content_md")
+  videoUrl        String?  @map("video_url")
+  /// Used to estimate course length.
+  durationMinutes Int?     @map("duration_minutes")
+  /// Order within the module. Unique per module, deferrable (see header).
+  position        Int
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([moduleId, position])
+  @@map("lessons")
+}
+
+/// One row per student per course, forever. Dropping sets status = DROPPED;
+/// re-enrolling reuses the same row.
+model Enrollment {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId    String           @map("course_id") @db.Uuid
+  studentId   String           @map("student_id") @db.Uuid
+  status      EnrollmentStatus @default(ACTIVE)
+  enrolledAt  DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz(3)
+  completedAt DateTime?        @map("completed_at") @db.Timestamptz(3)
+  droppedAt   DateTime?        @map("dropped_at") @db.Timestamptz(3)
+
+  // Restrict on both sides: a student's history is never destroyed by a cascade.
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  student User   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@unique([courseId, studentId])
+  @@map("enrollments")
+}
