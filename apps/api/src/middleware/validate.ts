@@ -55,8 +55,18 @@ export function getValidated<B = unknown, Q = unknown, P = unknown>(
 }
 
 export function zodDetails(error: z.ZodError, prefix?: string): ApiErrorDetail[] {
-  return error.issues.map((issue) => ({
-    path: [...(prefix ? [prefix] : []), ...issue.path.map(String)].join('.'),
-    message: issue.message,
-  }));
+  return error.issues.flatMap((issue) => {
+    const base = prefix ? [prefix, ...issue.path.map(String)] : issue.path.map(String);
+
+    // Zod reports an unexpected key against the object, not the key, so name the keys here —
+    // "Unexpected field \"role\"" is actionable, "Unrecognized key" on an empty path is not.
+    if (issue.code === 'unrecognized_keys') {
+      return issue.keys.map((key) => ({
+        path: [...base, key].join('.'),
+        message: `Unexpected field "${key}"`,
+      }));
+    }
+
+    return [{ path: base.join('.'), message: issue.message }];
+  });
 }

@@ -1,4 +1,11 @@
-import { idParam, isUserRole, pageQuery, slugParam } from '@lumen/shared';
+import {
+  idParam,
+  isUserRole,
+  loginSchema,
+  pageQuery,
+  registerSchema,
+  slugParam,
+} from '@lumen/shared';
 import { describe, expect, it } from 'vitest';
 
 describe('shared request schemas', () => {
@@ -32,5 +39,79 @@ describe('shared request schemas', () => {
     expect(isUserRole('ADMIN')).toBe(true);
     expect(isUserRole('admin')).toBe(false);
     expect(isUserRole(undefined)).toBe(false);
+  });
+});
+
+describe('register schema', () => {
+  const valid = {
+    fullName: 'Priya Raman',
+    email: 'priya@lumen.test',
+    password: 'Password123',
+    role: 'INSTRUCTOR',
+  };
+
+  it('accepts a good registration', () => {
+    expect(registerSchema.parse(valid)).toEqual(valid);
+  });
+
+  it('trims the name and lowercases the email', () => {
+    const parsed = registerSchema.parse({
+      ...valid,
+      fullName: '  Priya Raman ',
+      email: ' Priya@Lumen.TEST ',
+    });
+
+    expect(parsed.fullName).toBe('Priya Raman');
+    expect(parsed.email).toBe('priya@lumen.test');
+  });
+
+  it('refuses to create an admin', () => {
+    expect(registerSchema.safeParse({ ...valid, role: 'ADMIN' }).success).toBe(false);
+  });
+
+  it('wants eight characters, a letter and a number', () => {
+    const message = (password: string) =>
+      registerSchema.safeParse({ ...valid, password }).error?.issues.map((i) => i.message) ?? [];
+
+    expect(message('Pass1')).toContain('Use at least 8 characters');
+    expect(message('password')).toContain('Include at least one number');
+    expect(message('12345678')).toContain('Include at least one letter');
+    expect(registerSchema.safeParse({ ...valid, password: 'Password123' }).success).toBe(true);
+  });
+
+  it('stops at the 72-character limit bcrypt imposes', () => {
+    expect(registerSchema.safeParse({ ...valid, password: `a1${'x'.repeat(71)}` }).success).toBe(
+      false,
+    );
+  });
+
+  it('rejects a malformed email and an empty name', () => {
+    expect(registerSchema.safeParse({ ...valid, email: 'priya-at-lumen' }).success).toBe(false);
+    expect(registerSchema.safeParse({ ...valid, fullName: '   ' }).success).toBe(false);
+  });
+
+  it('rejects an unexpected field instead of ignoring it', () => {
+    const result = registerSchema.safeParse({
+      ...valid,
+      id: 'fdf0a4e7-6a7d-4a74-9a1e-1f3c2b4d5e6f',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.code).toBe('unrecognized_keys');
+  });
+});
+
+describe('login schema', () => {
+  it('normalises the email but does not judge its shape', () => {
+    // A malformed address must fail the same way a wrong password does — at 401, not 400.
+    expect(loginSchema.parse({ email: ' Priya@Lumen.TEST ', password: 'x' }).email).toBe(
+      'priya@lumen.test',
+    );
+    expect(loginSchema.safeParse({ email: 'not-an-email', password: 'x' }).success).toBe(true);
+  });
+
+  it('needs both fields', () => {
+    expect(loginSchema.safeParse({ email: '', password: 'x' }).success).toBe(false);
+    expect(loginSchema.safeParse({ email: 'a@b.co', password: '' }).success).toBe(false);
   });
 });

@@ -8,6 +8,10 @@ export const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const secret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 
+// We sign `userId` ourselves, so it is always a uuid. Checking anyway keeps a malformed value
+// from reaching Postgres, where a non-uuid in a uuid column is a 500 rather than a 401.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * What an access token says about its owner. Nothing sensitive, and `role` is only a hint for
  * the UI: permission decisions re-read the role from the database (see authenticate middleware).
@@ -39,7 +43,7 @@ export async function verifyAccessToken(
       currentDate: now,
     });
     const { userId, role } = payload;
-    if (typeof userId !== 'string' || !isUserRole(role)) return null;
+    if (typeof userId !== 'string' || !UUID.test(userId) || !isUserRole(role)) return null;
     return { userId, role };
   } catch {
     return null;

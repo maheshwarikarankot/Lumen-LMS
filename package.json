@@ -2,7 +2,7 @@
   "name": "lumen-lms",
   "version": "0.1.0",
   "private": true,
-  "description": "Lumen — a small learning management system",
+  "description": "Lumen \u2014 a small learning management system",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -19,7 +19,7 @@
     "dev": "pnpm --filter @lumen/shared build && pnpm -r --parallel dev",
     "build": "pnpm -r build",
     "start": "pnpm -r --parallel start",
-    "test": "pnpm -r --if-present test",
+    "test": "pnpm --filter @lumen/shared build && pnpm -r --if-present test",
     "typecheck": "pnpm --filter @lumen/shared build && pnpm -r --parallel typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

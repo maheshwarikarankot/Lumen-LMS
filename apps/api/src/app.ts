@@ -1,3 +1,4 @@
+import cookieParser from 'cookie-parser';
 import express, { type Express } from 'express';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
@@ -10,6 +11,8 @@ export function createApp(): Express {
   app.disable('x-powered-by');
   app.use(requestLogger);
   app.use(express.json({ limit: '100kb' }));
+  // Auth tokens travel in httpOnly cookies, so every request needs them parsed.
+  app.use(cookieParser());
 
   app.use('/api', apiRouter);
 

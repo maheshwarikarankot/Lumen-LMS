@@ -89,3 +89,16 @@ export async function agentFor(user: { id: string; role: UserRole }) {
   agent.set('Cookie', `${ACCESS_COOKIE}=${token}`);
   return agent;
 }
+
+/** The whole `Set-Cookie` line for `name`, flags included. */
+export function readCookie(res: request.Response, name: string): string | undefined {
+  const all = (res.headers['set-cookie'] ?? []) as unknown as string[];
+  return all.find((cookie) => cookie.startsWith(`${name}=`));
+}
+
+/** Just the value, for sending back on a later request. Throws if the cookie is not there. */
+export function cookieValue(res: request.Response, name: string): string {
+  const cookie = readCookie(res, name);
+  if (!cookie) throw new Error(`No ${name} cookie on this response`);
+  return decodeURIComponent(cookie.slice(name.length + 1).split(';')[0] ?? '');
+}

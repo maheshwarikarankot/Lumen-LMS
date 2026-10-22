@@ -5,3 +5,4 @@ export * from './enums.js';
 export * from './api.js';
 export * from './models.js';
 export * from './schemas/common.js';
+export * from './schemas/auth.js';
